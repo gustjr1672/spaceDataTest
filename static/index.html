@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>옵저버-1A 실시간 관제 대시보드</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { margin: 0; padding: 0; display: flex; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #map { width: 75vw; height: 100vh; }
+        #sidebar { width: 25vw; height: 100vh; background-color: #1e1e1e; color: #fff; padding: 20px; box-sizing: border-box; }
+        h2 { color: #4CAF50; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .data-box { background: #2d2d2d; padding: 15px; margin-bottom: 15px; border-radius: 8px; font-size: 1.1em; }
+        .data-value { font-weight: bold; color: #00bcd4; font-size: 1.3em; float: right; }
+        .blinking { animation: blinker 1.5s linear infinite; color: #ffeb3b; }
+        @keyframes blinker { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <div id="sidebar">
+        <h2>🛰️ NARA SPACE<br>GROUND STATION</h2>
+        <div class="data-box">위성명 <span class="data-value" id="sat-name">-</span></div>
+        <div class="data-box">위도 (LAT) <span class="data-value" id="sat-lat">-</span></div>
+        <div class="data-box">경도 (LON) <span class="data-value" id="sat-lon">-</span></div>
+        <div class="data-box">고도 (ALT) <span class="data-value" id="sat-alt">-</span></div>
+        <p class="blinking">● LIVE TRACKING</p>
+    </div>
+
+    <script>
+        // 1. 지도 초기화 (기본 위치: 서울)
+        const map = L.map('map').setView([37.5665, 126.9780], 3);
+
+        // 2. 배경 지도 타일 설정 (어두운 테마)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://carto.com/">CARTO</a>'
+        }).addTo(map);
+
+        // 3. 위성 마커 아이콘 설정
+        const satIcon = L.icon({
+            iconUrl: 'https://cdn-icons-png.flaticon.com/512/3255/3255655.png', // 임시 위성 아이콘
+            iconSize: [40, 40],
+            iconAnchor: [20, 20]
+        });
+        const marker = L.marker([0, 0], {icon: satIcon}).addTo(map);
+        let isFirstLoad = true;
+
+        // 4. FastAPI 서버에서 데이터 가져오기
+        async function fetchSatelliteData() {
+            try {
+                const response = await fetch('/api/satellite/observer-1a');
+                const data = await response.json();
+
+                // 화면 데이터 업데이트
+                document.getElementById('sat-name').innerText = data.name;
+                document.getElementById('sat-lat').innerText = data.lat + "°";
+                document.getElementById('sat-lon').innerText = data.lon + "°";
+                document.getElementById('sat-alt').innerText = data.alt + " km";
+
+                // 마커 위치 이동
+                const newLatLng = new L.LatLng(data.lat, data.lon);
+                marker.setLatLng(newLatLng);
+
+                // 처음 로딩될 때만 지도의 중심을 위성으로 맞춤
+                if (isFirstLoad) {
+                    map.panTo(newLatLng);
+                    isFirstLoad = false;
+                }
+            } catch (error) {
+                console.error("데이터 통신 에러:", error);
+            }
+        }
+
+        // 5. 1초마다 함수 반복 실행 (실시간 관제)
+        setInterval(fetchSatelliteData, 1000);
+        fetchSatelliteData(); // 최초 1회 즉시 실행
+    </script>
+</body>
+</html>
